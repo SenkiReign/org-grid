@@ -3,7 +3,7 @@
 ;; Author:  Senki R.
 ;; Keywords: notes, multimedia, moodboard, emacs, org-mode
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.3.5
+;; Version: 0.3.6
 
 ;;; Code:
 
@@ -547,7 +547,19 @@ warning doesn't repeat on every thumbnail.")
     (org-grid--boxed-raster item out "PDF" counts)))
 
 (defun org-grid--image-thumb (item counts)
-  (org-grid--boxed-raster item (org-grid-item-path item) "IMG" counts))
+  (let ((out (org-grid-item-path item)))
+    (if (executable-find org-grid-ffmpeg-executable)
+        (let ((cached (org-grid--cache-file item "jpg")))
+          (unless (file-exists-p cached)
+            (call-process org-grid-ffmpeg-executable nil nil nil
+                          "-y" "-i" (org-grid-item-path item)
+                          "-vf" (format "scale=%d:-1" (* org-grid-thumbnail-oversample
+                                                        org-grid-thumbnail-size))
+                          "-loglevel" "quiet" cached))
+          (when (file-exists-p cached)
+            (setq out cached)))
+      (org-grid--warn-missing-tool org-grid-ffmpeg-executable))
+    (org-grid--boxed-raster item out "IMG" counts)))
 
 (defun org-grid--get-image (item counts)
   (unless org-grid--image-cache
@@ -835,7 +847,12 @@ to `org-grid--card-starts'.")
     (setq org-grid--pending-fill (nreverse pending))
     (goto-char (min pos (point-max))))
   (when org-grid--pending-fill
-    (org-grid--fill-visible)
+    ;; Don't call org-grid--fill-visible synchronously here: it can spawn
+    ;; ffmpeg/pdftoppm for every visible thumbnail, blocking Emacs before
+    ;; the placeholder grid ever gets painted. Fire almost immediately once
+    ;; idle instead, so the grid shows up instantly and thumbnails pop in
+    ;; a beat later.
+    (run-with-idle-timer 0 nil #'org-grid--idle-fill-tick (current-buffer))
     (org-grid--schedule-idle-fill)))
 
 (defun org-grid--apply-thumbnail (card)
