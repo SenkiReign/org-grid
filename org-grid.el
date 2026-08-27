@@ -3,7 +3,7 @@
 ;; Author:  Senki R.
 ;; Keywords: notes, multimedia, moodboard, emacs, org-mode
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.3.1
+;; Version: 0.3.5
 
 ;;; Code:
 
@@ -816,7 +816,7 @@ to `org-grid--card-starts'.")
                  (start (point)))
             (push start starts)
             (push cur-row rows)
-            (push count cols-list)
+            (push (mod count cols) cols-list)
             (insert-image img (org-grid-item-title it))
             (when deferred
               (push (list start (point) it counts) pending))
@@ -1064,21 +1064,26 @@ For a note, jump straight to its heading."
     best))
 
 (defun org-grid-down-card (&optional count)
-  "Move cursor down by COUNT visual rows, preserving column like a normal grid.
-Works correctly in cluster view even when a cluster's last row is short,
-since rows and columns are tracked from the actual layout rather than
-assumed from a fixed stride."
+  "Move cursor down by COUNT visual rows.
+In the plain grid (uniform row length), this is a fixed stride of
+`org-grid--cards-per-row' cards, matching image-dired-style navigation.
+In cluster/orphan view, rows can be shorter than a full row (a cluster
+always starts fresh), so navigation instead tracks each card's actual
+row/column so Up/Down still lands in the visually correct column."
   (interactive "p")
-  (let ((idx (org-grid--card-index-at (point))))
-    (when (and idx org-grid--card-rows (> (length org-grid--card-rows) 0))
-      (let* ((cnt (or count 1))
-             (row (aref org-grid--card-rows idx))
-             (col (aref org-grid--card-cols idx))
-             (max-row (aref org-grid--card-rows (1- (length org-grid--card-rows))))
-             (target-row (max 0 (min max-row (+ row cnt))))
-             (target-idx (org-grid--nearest-card-in-row target-row col)))
-        (when target-idx
-          (goto-char (aref org-grid--card-starts target-idx)))))))
+  (if (or org-grid--cluster-p org-grid--orphan-p)
+      (let ((idx (org-grid--card-index-at (point))))
+        (when (and idx org-grid--card-rows (> (length org-grid--card-rows) 0))
+          (let* ((cnt (or count 1))
+                 (row (aref org-grid--card-rows idx))
+                 (col (aref org-grid--card-cols idx))
+                 (max-row (aref org-grid--card-rows (1- (length org-grid--card-rows))))
+                 (target-row (max 0 (min max-row (+ row cnt))))
+                 (target-idx (org-grid--nearest-card-in-row target-row col)))
+            (when target-idx
+              (goto-char (aref org-grid--card-starts target-idx))))))
+    (let ((cols (org-grid--cards-per-row)))
+      (org-grid-next-card (* (or count 1) cols)))))
 
 (defun org-grid-up-card (&optional count)
   "Move cursor up by COUNT visual rows in the grid."
