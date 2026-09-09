@@ -137,21 +137,21 @@ holds or how many times links/snippets/search touch it.")
   (condition-case nil
       (let ((content (org-grid--file-content (org-grid-item-path item))))
         (with-temp-buffer
-        (insert content)
-        (let ((end (min (or (org-grid-item-end item) (point-max)) (point-max))))
-          (goto-char (org-grid-item-pos item))
-          (forward-line 1)
-          (let (lines)
-            (while (< (point) end)
-              (let ((line (buffer-substring-no-properties
-                           (line-beginning-position) (line-end-position))))
-                (unless (string-match-p
-                         "\\`[ \t]*\\(#\\+\\|:PROPERTIES:\\|:END:\\|:[[:alnum:]_-]+:\\|---\\)"
-                         line)
-                  (push line lines)))
-              (forward-line 1))
-            (let ((body (string-trim (mapconcat #'identity (nreverse lines) "\n"))))
-              (substring body 0 (min (length body) org-grid-note-snippet-length)))))))
+          (insert content)
+          (let ((end (min (or (org-grid-item-end item) (point-max)) (point-max))))
+            (goto-char (org-grid-item-pos item))
+            (forward-line 1)
+            (let (lines)
+              (while (< (point) end)
+                (let ((line (buffer-substring-no-properties
+                             (line-beginning-position) (line-end-position))))
+                  (unless (string-match-p
+                           "\\`[ \t]*\\(#\\+\\|:PROPERTIES:\\|:END:\\|:[[:alnum:]_-]+:\\|---\\)"
+                           line)
+                    (push line lines)))
+                (forward-line 1))
+              (let ((body (string-trim (mapconcat #'identity (nreverse lines) "\n"))))
+                (substring body 0 (min (length body) org-grid-note-snippet-length)))))))
     (error "")))
 
 (defun org-grid--get-snippet (item)
@@ -188,14 +188,60 @@ timestamp prefix)."
          :snippet-fetched t :snippet "")))))
 
 (defun org-grid--parse-org-file (path)
-  "Parse PATH and return a list of note items, one per heading with :ID:.
-Reads PATH through the file-content cache, populating it as a side
-effect so later link/snippet/search passes over PATH hit memory."
+  "Parse PATH and return a list of note items.
+Recognizes both file-level Org-Roam notes (top-level :ID: and #+TITLE:)
+and heading-level notes with an :ID: property."
   (let (items (content (org-grid--file-content path)))
     (condition-case nil
         (with-temp-buffer
           (insert content)
           (let ((mtime (float-time (file-attribute-modification-time (file-attributes path)))))
+            (goto-char (point-min))
+            
+            ;; 1. Check for File-Level Node (e.g. Org-Roam v2 file node)
+            (let (file-id file-title file-tags file-end)
+              ;; Extract #+TITLE if present
+              (when (re-search-forward "^[ \t]*#\\+TITLE:[ \t]*\\(.*\\)$" nil t)
+                (setq file-title (string-trim (match-string 1))))
+              
+              ;; Extract #+FILETAGS if present
+              (goto-char (point-min))
+              (when (re-search-forward "^[ \t]*#\\+FILETAGS:[ \t]*\\(.*\\)$" nil t)
+                (let ((raw-tags (match-string 1)))
+                  (setq file-tags (split-string raw-tags ":\\|[ \t]+" t))))
+
+              ;; Search for top-level :ID: (before the first heading)
+              (goto-char (point-min))
+              (let ((first-heading-pos (save-excursion
+                                         (if (re-search-forward org-grid--heading-re nil t)
+                                             (match-beginning 0)
+                                           (point-max)))))
+                (when (re-search-forward "^[ \t]*:PROPERTIES:[ \t]*$" first-heading-pos t)
+                  (forward-line 1)
+                  (while (and (< (point) first-heading-pos)
+                              (not (looking-at "^[ \t]*:END:[ \t]*$")))
+                    (when (looking-at "^[ \t]*:ID:[ \t]+\\(.+?\\)[ \t]*$")
+                      (setq file-id (match-string 1)))
+                    (forward-line 1)))
+                
+                (when file-id
+                  (let ((note-mtime mtime))
+                    (push (make-org-grid-item
+                           :id file-id
+                           :title (if (and file-title (not (string-empty-p file-title)))
+                                      file-title
+                                    (file-name-base path))
+                           :tags file-tags
+                           :path path
+                           :type 'text
+                           :mtime note-mtime
+                           :pos (point-min)
+                           :end first-heading-pos
+                           :snippet-fetched nil
+                           :snippet "")
+                          items)))))
+
+            ;; 2. Parse Heading-Level Nodes
             (goto-char (point-min))
             (while (re-search-forward org-grid--heading-re nil t)
               (let* ((level (length (match-string 1)))
@@ -203,8 +249,6 @@ effect so later link/snippet/search passes over PATH hit memory."
                      (hstart (line-beginning-position))
                      (tags nil) (title raw))
                 (when (string-match org-grid--tags-re raw)
-                  ;; Capture match data before `split-string' (which runs its
-                  ;; own regexp matching internally and would clobber it).
                   (let ((tagstr (match-string 1 raw))
                         (cut (match-beginning 0)))
                     (setq tags (split-string tagstr ":" t)
@@ -231,17 +275,7 @@ effect so later link/snippet/search passes over PATH hit memory."
                                             (format "^\\*\\{1,%d\\}[ \t]" level) nil t)
                                            (line-beginning-position)
                                          (point-max))))
-                           ;; Parse YYYYMMDD-HHMMSS from the ID if it matches
-                           (note-mtime 
-                            (if (string-match "\\`\\([0-9]\\{4\\}\\)\\([0-9]\\{2\\}\\)\\([0-9]\\{2\\}\\)-\\([0-9]\\{2\\}\\)\\([0-9]\\{2\\}\\)\\([0-9]\\{2\\}\\)\\'" id)
-                                (float-time (encode-time
-                                             (string-to-number (match-string 6 id))
-                                             (string-to-number (match-string 5 id))
-                                             (string-to-number (match-string 4 id))
-                                             (string-to-number (match-string 3 id))
-                                             (string-to-number (match-string 2 id))
-                                             (string-to-number (match-string 1 id))))
-                              mtime))) ;; fallback to the single file mtime if ID isn't a timestamp
+                           (note-mtime mtime))
                       (ignore body-start)
                       (push (make-org-grid-item
                              :id id
@@ -340,24 +374,24 @@ exactly once no matter how many of its headings are notes."
                          (found nil))
                      (goto-char (min (org-grid-item-pos it) (point-max)))
                      (while (and (< (point) end)
-				 (re-search-forward org-grid--link-re end t))
+                                 (re-search-forward org-grid--link-re end t))
                        (let* ((target (match-string 1))
                               (found-id
                                (cond
-				((string-prefix-p "id:" target)
-				 (let ((id (substring target 3)))
+                                ((string-prefix-p "id:" target)
+                                 (let ((id (substring target 3)))
                                    (and (gethash id ids) id)))
-				((string-prefix-p "file:" target)
-				 (gethash (ignore-errors
+                                ((string-prefix-p "file:" target)
+                                 (gethash (ignore-errors
                                             (file-truename
                                              (expand-file-name (substring target 5) dir)))
                                           paths))
-				((string-match-p "\\`[a-z]+:" target) nil) ; http:, https:, mailto:, etc.
-				(t
-				 (gethash (ignore-errors
+                                ((string-match-p "\\`[a-z]+:" target) nil) ; http:, https:, mailto:, etc.
+                                (t
+                                 (gethash (ignore-errors
                                             (file-truename (expand-file-name target dir)))
                                           paths)))))
-			 (when (and found-id
+                         (when (and found-id
                                     (not (equal found-id (org-grid-item-id it)))
                                     (not (member found-id found)))
                            (push found-id found)
@@ -718,11 +752,6 @@ to `org-grid--card-starts'.")
 
 (defun org-grid--sort-value (item key)
   (pcase key
-    ;; Zero-padded so lexicographic string< / string> (used by the sorter
-    ;; below) sorts chronologically, since ids are no longer timestamps.
-    ;; Position is a tiebreaker: headings in the same file share one mtime,
-    ;; so a heading further down the file (created/edited later) ranks
-    ;; higher than one above it.
     ('date (format "%020d-%010d"
                     (round (* 1000 (org-grid-item-mtime item)))
                     (or (org-grid-item-pos item) 0)))
@@ -847,11 +876,6 @@ to `org-grid--card-starts'.")
     (setq org-grid--pending-fill (nreverse pending))
     (goto-char (min pos (point-max))))
   (when org-grid--pending-fill
-    ;; Don't call org-grid--fill-visible synchronously here: it can spawn
-    ;; ffmpeg/pdftoppm for every visible thumbnail, blocking Emacs before
-    ;; the placeholder grid ever gets painted. Fire almost immediately once
-    ;; idle instead, so the grid shows up instantly and thumbnails pop in
-    ;; a beat later.
     (run-with-idle-timer 0 nil #'org-grid--idle-fill-tick (current-buffer))
     (org-grid--schedule-idle-fill)))
 
@@ -1039,8 +1063,6 @@ For a note, jump straight to its heading."
   "Refresh the grid buffer."
   (interactive)
   (when org-grid--source-directory
-    ;; Stale content/links/clusters must not survive a refresh, since the
-    ;; files on disk may have changed.
     (when (hash-table-p org-grid--file-cache) (clrhash org-grid--file-cache))
     (setq org-grid--links-cache nil
           org-grid--links-cache-key nil
@@ -1081,12 +1103,7 @@ For a note, jump straight to its heading."
     best))
 
 (defun org-grid-down-card (&optional count)
-  "Move cursor down by COUNT visual rows.
-In the plain grid (uniform row length), this is a fixed stride of
-`org-grid--cards-per-row' cards, matching image-dired-style navigation.
-In cluster/orphan view, rows can be shorter than a full row (a cluster
-always starts fresh), so navigation instead tracks each card's actual
-row/column so Up/Down still lands in the visually correct column."
+  "Move cursor down by COUNT visual rows."
   (interactive "p")
   (if (or org-grid--cluster-p org-grid--orphan-p)
       (let ((idx (org-grid--card-index-at (point))))
