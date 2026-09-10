@@ -6,6 +6,8 @@ A visual grid for vanilla Org notes, images, videos, and PDFs.
 
 `org-grid` scans a directory (or a Dired buffer) and shows every Org heading with an `:ID:` property, plus every image/video/PDF file, as cards in a scrollable grid. Notes show a text snippet; media shows a thumbnail.
 
+<img width="1331" height="690" alt="sc" src="https://github.com/user-attachments/assets/5cf17e1c-8675-4492-bfb9-84ac43578df0" />
+
 ## Features
 
 - Works on plain Org files — any heading with `:ID:` counts as a note
