@@ -1,6 +1,6 @@
 # org-grid.el
 
-A visual grid Emacs org-mode notes, images, videos, and PDFs.
+A visual grid for Emacs org-mode notes, images, videos, and PDFs.
 
 ## What it does
 
