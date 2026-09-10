@@ -10,7 +10,7 @@ A visual grid for vanilla Org notes, images, videos, and PDFs.
 
 ## Features
 
-- Works on plain Org files — any heading with `:ID:` counts as a note
+- Works on plain Org files any heading with `:ID:` counts as a note
 - Media thumbnails for images, video (via `ffmpeg`), and PDF (via `pdftoppm`)
 - Query by text or `#tag`
 - Sort by date / title / tags / type
