@@ -25,6 +25,8 @@ A visual grid for Emacs org-mode notes, images, videos, and PDFs.
 - Emacs 27.1+
 - Optional: `ffmpeg` (video thumbnails), `pdftoppm` (PDF thumbnails), `rg` (fast search)
 
+The first time you open the grid thumbnail creation may take several seconds depending on the number of notes and file types. After that, grid-open and navigation should be snappy.
+
 ## Usage
 
 ```elisp
