@@ -15,6 +15,7 @@ A visual grid for Emacs org-mode notes, images, videos, and PDFs.
 - Query by text or `#tag`
 - Sort by date / title / tags / type
 - Cluster view (group by shared links) and orphan view (unlinked items)
+- Color bars for tags. (minimum 2 notes should share the same tag for color bar to appear)
 - Fast full-text filtering via `ripgrep` (optional)
 - Open from Dired, jump back to Dired, or jump straight to a note's heading
 - File based id's supported so it works with org-roam as well.
