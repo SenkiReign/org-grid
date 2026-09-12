@@ -4,7 +4,7 @@ A visual grid for Emacs org-mode notes, images, videos, and PDFs.
 
 ## What it does
 
-`org-grid` scans a directory (or a Dired buffer) and shows every Org heading with an `:ID:` property, plus every image/video/PDF file, as cards in a scrollable grid. Notes show a text snippet; media shows a thumbnail.
+`org-grid` scans a directory (or a Dired buffer) and shows every Org heading with an `:ID:` property, plus every image/video/PDF file, as cards in a scrollable grid. Notes show a text snippet; media shows a thumbnail. It has zettelkasten friendly views like "cluster view, orphan view and queries based on keyword or tags"
 
 <img width="1334" height="820" alt="gridd" src="https://github.com/user-attachments/assets/3f134f62-e1cb-4a04-9685-0adb88e9c0ce" />
 
