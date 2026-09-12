@@ -3,7 +3,7 @@
 ;; Author:  Senki R.
 ;; Keywords: notes, multimedia, moodboard, emacs, org-mode
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.3.6
+;; Version: 0.3.7
 
 ;;; Code:
 
@@ -43,6 +43,24 @@ in the tree (image/video/pdf) is a media item."
 (defcustom org-grid-lazy-batch-size 6
   "How many offscreen thumbnails to generate per idle tick."
   :type 'integer
+  :group 'org-grid)
+
+(defcustom org-grid-default-sort-key 'date
+  "Initial sort key when opening a grid.
+`date' sorts by file modification time (per-file for notes sharing a
+file). `created' sorts by each note's :ID: timestamp when it looks
+like a ts-style org-id (e.g. 20260911-160239 or 20260911T160239),
+falling back to file mtime per-item when it doesn't; media items
+always use their file mtime under `created' too, so both interleave
+on the same time scale."
+  :type '(choice (const date) (const created) (const title)
+                  (const tags) (const type))
+  :group 'org-grid)
+
+(defcustom org-grid-default-sort-desc t
+  "Initial sort direction when opening a grid.
+Non-nil means descending (newest/last first)."
+  :type 'boolean
   :group 'org-grid)
 
 (defcustom org-grid-ripgrep-executable "rg"
@@ -673,6 +691,8 @@ to `org-grid--card-starts'.")
 (define-derived-mode org-grid-mode special-mode "Org-Grid"
   "Major mode for browsing org notes and media as an image-dired style grid."
   (setq truncate-lines t)
+  (setq org-grid--sort-key org-grid-default-sort-key)
+  (setq org-grid--sort-desc org-grid-default-sort-desc)
   (setq header-line-format '(:eval (org-grid--header-line)))
   (add-hook 'post-command-hook #'org-grid--update-point-info nil t)
   (add-hook 'window-size-change-functions #'org-grid--on-window-size-change nil t)
@@ -750,11 +770,32 @@ to `org-grid--card-starts'.")
                                                 (org-grid-item-pos item)
                                                 (org-grid-item-end item))))))))
 
+(defun org-grid--id-timestamp (id)
+  "Epoch seconds from a ts-style org ID, or nil if ID isn't timestamp-shaped.
+Accepts 20260911T160239, 20260911-160239, and 20260911160239 alike.
+Returns nil (rather than erroring) for UUIDs or any other ID shape,
+so callers can fall back to file mtime."
+  (when (string-match "\\`\\([0-9]\\{8\\}\\)[T-]?\\([0-9]\\{6\\}\\)" id)
+    (ignore-errors
+      (let ((d (match-string 1 id)) (tm (match-string 2 id)))
+        (float-time
+         (encode-time
+          (string-to-number (substring tm 4 6))
+          (string-to-number (substring tm 2 4))
+          (string-to-number (substring tm 0 2))
+          (string-to-number (substring d 6 8))
+          (string-to-number (substring d 4 6))
+          (string-to-number (substring d 0 4))))))))
+
 (defun org-grid--sort-value (item key)
   (pcase key
     ('date (format "%020d-%010d"
                     (round (* 1000 (org-grid-item-mtime item)))
                     (or (org-grid-item-pos item) 0)))
+    ('created (format "%020d-%010d"
+                       (round (* 1000 (or (org-grid--id-timestamp (org-grid-item-id item))
+                                           (org-grid-item-mtime item))))
+                       (or (org-grid-item-pos item) 0)))
     ('title (org-grid-item-title item))
     ('tags (or (car (org-grid-item-tags item)) ""))
     ('type (symbol-name (org-grid-item-type item)))))
@@ -1043,11 +1084,12 @@ For a note, jump straight to its heading."
   (org-grid--render))
 
 (defun org-grid-sort-cycle ()
-  "Cycle through sorting keys (date -> title -> tags -> type)."
+  "Cycle through sorting keys (date -> created -> title -> tags -> type)."
   (interactive)
   (setq org-grid--sort-key
         (pcase org-grid--sort-key
-          ('date 'title)
+          ('date 'created)
+          ('created 'title)
           ('title 'tags)
           ('tags 'type)
           (_ 'date)))
