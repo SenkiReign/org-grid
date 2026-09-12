@@ -13,7 +13,7 @@ A visual grid for Emacs org-mode notes, images, videos, and PDFs.
 - Works on org files, any heading with `:ID:` counts as a note
 - Media thumbnails for images, video (via `ffmpeg`), and PDF (via `pdftoppm`)
 - Query by text or `#tag`
-- Sort by date / title / tags / type
+- Sort by date / created (based on timestamp format ids) / title / tags / type
 - Cluster view (group by shared links) and orphan view (unlinked items)
 - Color bars for tags. (minimum 2 notes should share the same tag for color bar to appear)
 - Fast full-text filtering via `ripgrep` (optional)
