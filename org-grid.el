@@ -1,9 +1,9 @@
-;;; org-grid.el --- Grid view for vanilla org notes -*- lexical-binding: t; -*-
+;;; org-grid.el --- Grid view for org notes -*- lexical-binding: t; -*-
 
 ;; Author:  Senki R.
 ;; Keywords: notes, multimedia, moodboard, emacs, org-mode
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.3.7
+;; Version: 0.4.0
 
 ;;; Code:
 
@@ -97,6 +97,14 @@ Non-nil means descending (newest/last first)."
 (defface org-grid-tag-face
   '((t :inherit shadow))
   "Face for tags in the header line.")
+
+(defun org-grid--muted-color (fg bg)
+  "Blend FG 55% toward BG — muted, but readable on any background."
+  (let* ((f (color-name-to-rgb fg))
+         (b (color-name-to-rgb bg))
+         (mix (lambda (a c) (+ (* a 0.55) (* c 0.45)))))
+    (apply #'color-rgb-to-hex
+           (append (cl-mapcar mix f b) '(2)))))
 
 (defvar org-grid--cache-dir nil)
 
@@ -481,7 +489,7 @@ exactly once no matter how many of its headings are notes."
   (let* ((w org-grid-thumbnail-size) (h (round (* w 0.72)))
          (bg (face-background 'default nil t))
          (fg (face-foreground 'default nil t))
-         (muted (face-foreground 'shadow nil t))
+	 (muted (org-grid--muted-color fg bg))
          (color (org-grid--color-for (org-grid-item-tags item) counts))
          (svg (svg-create w h :xmlns:xlink "http://www.w3.org/1999/xlink")))
     (svg-rectangle svg 0 0 w h :fill bg :rx 10)
