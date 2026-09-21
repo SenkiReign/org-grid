@@ -3,7 +3,7 @@
 ;; Author:  Senki R.
 ;; Keywords: notes, multimedia, moodboard, emacs, org-mode
 ;; Package-Requires: ((emacs "27.1"))
-;; Version: 0.4.0
+;; Version: 0.4.1
 
 ;;; Code:
 
@@ -89,6 +89,18 @@ Non-nil means descending (newest/last first)."
 (defcustom org-grid-pdf-extensions '("pdf")
   "File extensions treated as PDFs."
   :type '(repeat string) :group 'org-grid)
+
+(defcustom org-grid-ignore-regexp "~\\'"
+  "Regexp matching file names that org-grid skips entirely.
+Matched against the file name without its directory.  The default
+skips Emacs backup files (`foo.org~' and numbered `foo.org.~1~'),
+which would otherwise show up as duplicates of the real note."
+  :type 'regexp :group 'org-grid)
+
+(defun org-grid--ignored-file-p (file)
+  "Non-nil if FILE's name matches `org-grid-ignore-regexp'."
+  (and org-grid-ignore-regexp
+       (string-match-p org-grid-ignore-regexp (file-name-nondirectory file))))
 
 (defface org-grid-title-face
   '((t :inherit bold))
@@ -327,7 +339,8 @@ ROOT can be a directory path string or a list of directory path strings."
                       dir ".*" nil
                       (lambda (d) (not (string-prefix-p "." (file-name-nondirectory d))))))
             (let ((base (file-name-nondirectory f)))
-              (unless (string-prefix-p "." base)
+              (unless (or (string-prefix-p "." base)
+                          (org-grid--ignored-file-p f))
                 (if (equal (downcase (or (file-name-extension base) "")) "org")
                     (dolist (it (org-grid--parse-org-file f)) (push it items))
                   (when-let ((item (org-grid--parse-media-file f)))
@@ -342,7 +355,8 @@ ROOT can be a directory path string or a list of directory path strings."
       (goto-char (point-min))
       (while (not (eobp))
         (let ((f (dired-get-filename nil t)))
-          (when (and f (not (file-directory-p f)))
+          (when (and f (not (file-directory-p f))
+                     (not (org-grid--ignored-file-p f)))
             (push f files)))
         (forward-line 1)))
     (nreverse files)))
