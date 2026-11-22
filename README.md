@@ -48,6 +48,7 @@ The first time you open the grid thumbnail creation may take several seconds dep
 | `r` | Reverse sort order |
 | `c` | Toggle cluster view |
 | `o` | Toggle orphan view |
+| `t` | Quick tag filter |
 | `g` | Refresh |
 | `n` / `p` / `TAB` | Next / previous card |
 | `↑` `↓` `←` `→` | Move between cards |
